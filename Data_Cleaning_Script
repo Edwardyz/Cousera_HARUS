@@ -1,0 +1,126 @@
+###############################################################################################################
+# data source
+#http://archive.ics.uci.edu/ml/datasets/Human+Activity+Recognition+Using+Smartphones
+#https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip
+###############################################################################################################
+
+
+###############################################################################################################
+# steps:
+#1 download files and read files into R
+#2 data type transformation
+#3 data merge
+#4 variable labeling  ---first tidy data
+#5 Calculate average  ---second tidy data
+###############################################################################################################
+
+###############################################################################################################
+# step 1 downloading the file 
+###############################################################################################################
+#loading package
+library(dplyr)  
+
+#setting working directory
+setwd("C:\\Users\\ed-wa\\Desktop\\HARUS_project") 
+
+#downloan data to local file
+data_url<- "https://d396qusza40orc.cloudfront.net/getdata%2Fprojectfiles%2FUCI%20HAR%20Dataset.zip"
+download.file(data_url,destfile = "./harus_data.zip",method = "curl") 
+
+#read files into R as table and check if the file has correct dimension
+x_train<-read.table(file ="X_train.txt",sep = "") 
+dim(x_train)  
+y_train<-read.table(file ="y_train.txt",sep = "") 
+dim(y_train)
+y_train<-read.table(file ="y_train.txt",sep = "")
+dim(y_train)
+x_test<-read.table(file ="X_test.txt",sep = "")
+dim(x_test)
+y_test<-read.table(file ="y_test.txt",sep = "")
+dim(y_test)
+subject_test<-read.table(file ="subject_test.txt",sep = "")
+dim(subject_test)
+subject_train<-read.table(file ="subject_train.txt",sep = "")
+dim(subject_train)
+
+###############################################################################################################
+# step 2 Merge the data
+###############################################################################################################
+#produce id for each observation for merging
+id_train<-c(1:nrow(x_train))
+id_test<-c(1:nrow(x_test))
+
+#merge test files
+x_test$id_x<-id_test
+y_test$id_y<-id_test
+subject_test$id_sub<-id_test
+merged_test_temp<-merge(x_test,y_test,by.x = "id_x",by.y = "id_y",all = TRUE)
+merged_test<-merge(merged_test_temp,subject_test,by.x = "id_x",by.y = "id_sub",all = TRUE)
+names(merged_test)
+
+#drop the id field
+merged_test$id.y<-NULL
+merged_test$id.x<-NULL
+
+#merge train files
+x_train$id_x<-id_train
+y_train$id_y<-id_train
+subject_train$id_sub<-id_train
+merged_train_temp<-merge(x_train,y_train,by.x = "id_x",by.y = "id_y",all = TRUE)
+merged_train<-merge(merged_train_temp,subject_train,by.x = "id_x",by.y = "id_sub",all = TRUE)
+names(merged_train)
+
+#drop the id field
+merged_train$id.y<-NULL
+merged_train$id.x<-NULL
+
+#bind train and test files 
+merged_dt<-rbind(merged_train,merged_test)
+dim(merged_dt)
+
+###############################################################################################################
+# step 3 Relabel the activity
+###############################################################################################################
+#create new field "Activity_lables" to contain lables 
+merged_dt$Activity_lables[merged_dt$V1.y == 1] <- "WALKING"
+merged_dt$Activity_lables[merged_dt$V1.y == 2] <- "WALKING_UPSTAIRS"
+merged_dt$Activity_lables[merged_dt$V1.y == 3] <- "WALKING_DOWNSTAIRS"
+merged_dt$Activity_lables[merged_dt$V1.y == 4] <- "SITTING"
+merged_dt$Activity_lables[merged_dt$V1.y == 5] <- "STANDING"
+merged_dt$Activity_lables[merged_dt$V1.y == 6] <- "LAYING"
+
+###############################################################################################################
+# step 4 Rename variables
+###############################################################################################################
+#use content of "feature" file to create variable names
+var_names_dt<-read.table("features.txt",stringsAsFactors = FALSE)
+var_names<-var_names_dt$V2
+
+#initialize the list used to contain modified variable names
+var_names_clean <- c(1:561)
+
+#modify variable names iteratively
+for (i in c(1:length(var_names))){
+                                  var_names_clean[i]<-gsub("\\()", "",var_names[i])
+								  var_names_clean[i]<-gsub("\\)","",var_names_clean[i])
+								  var_names_clean[i]<-gsub("\\(","",var_names_clean[i])
+								  var_names_clean[i]<-gsub("-","_",var_names_clean[i])
+								  var_names_clean[i]<-gsub(",","_",var_names_clean[i])
+								}
+merged_dt$id_x <- NULL
+
+#rename the variables that are not dealt with in the former loop
+colnames(merged_dt)[1:length(var_names)]<- var_names_clean
+colnames(merged_dt)[562:563]<-c("Activity_inx","Subject_id")
+
+###############################################################################################################
+# step 5 Calculate average of each variable for each activity and subject
+###############################################################################################################
+vars<-names(merged_dt[,c(1:561)])
+
+#use aggregate function to calculate means grouping by activitt_lables and subject_id
+avg_dt<-aggregate(merged_dt[,c(1:561)],by=list(group1=merged_dt$Activity_lables,group2=merged_dt$Subject_id),mean)
+
+#export data to local 
+write.csv(merged_dt,file = "HARUS_CLEAN_DT.csv")
+write.csv(avg_dt,file = "HARUS_AVG_DT.csv")
